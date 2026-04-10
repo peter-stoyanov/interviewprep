@@ -1,4 +1,4 @@
-# Reusable Component Design
+# Reusable component design
 
 **Abstraction level**: pattern
 **Category**: frontend architecture / UI design
@@ -8,41 +8,43 @@
 ## Related Topics
 
 - **Implementations of this**: React components, Vue components, Web Components, design systems
-- **Depends on this**: component composition, props and state, separation of concerns
-- **Works alongside**: accessibility, state management, design tokens
+- **Depends on this**: component composition, props vs state, separation of concerns
+- **Works alongside**: accessibility, design tokens, state management
 - **Contrast with**: page-specific components, copy-paste UI, monolithic components
-- **Temporal neighbors**: learn component basics first; next study composition and controlled vs uncontrolled patterns
+- **Temporal neighbors**: learn component basics first; next study controlled vs uncontrolled components and composition
 
 ---
 
 ## What is it
 
-Reusable component design is a pattern for building UI pieces that can be used in many places without rewriting them. A reusable component has a clear job, a small public API, and rules about what data it accepts and what output it produces. The main goal is control: the component should be flexible enough for different screens, but strict enough to stay predictable.
+Reusable component design is a pattern for building UI pieces that can be used in more than one place without rewriting their core behavior. The idea is to define a small, clear unit that accepts input data, applies stable rules, and produces predictable UI output. A good reusable component is flexible in the ways that matter and strict in the ways that protect correctness.
 
-- **Data**: input values, UI state, events, and visual variants
-- **Where it lives**: browser memory as part of the UI tree
-- **Who reads/writes it**: parent code passes data in; the component reads it and may emit events back out
-- **How it changes over time**: inputs change, internal state may change, rendered output updates in response
+In simple terms:
 
-At a basic level, reusable component design is just a way to control how UI data is shaped, displayed, and changed so the same building block works in more than one context.
+- The data is things like text, state, variants, and user actions.
+- It usually lives in browser memory as part of the UI tree.
+- A parent sends data into the component, the component reads it, and the component may send events back out.
+- Over time, the input changes, local UI state may change, and the rendered output changes with it.
+
+Reusable component design is just a way to control how UI data is shaped, transformed, and updated so one building block works in many contexts.
 
 ---
 
 ## What problem does it solve
 
-Start with a simple button on one page. It has text, maybe a disabled state, and maybe a click action. Writing it directly in the page is easy.
+Start with one screen that needs one button. Writing the button inline is easy: some label data goes in, a click action happens, the browser shows a visual result.
 
-Then the app grows. Now you need the same button in five places. One version has an icon. Another shows a loading state. Another must follow accessibility rules. Another must match a new visual style. If each page builds its own version, the same idea exists in multiple places.
+Now the product grows. The same button appears on the login page, settings page, checkout page, and modal dialogs. Each place needs the same core behavior but slightly different content or state. If every screen builds its own version, the same data is mapped to UI in different ways.
 
-That creates common failure modes:
+That creates common failures:
 
-- **Duplication**: the same markup and styling are copied into many files
-- **Inconsistency**: one button handles disabled state correctly, another does not
-- **Invalid data**: one page passes impossible combinations like `loading=true` and `disabled=false` without clear rules
-- **Hard-to-track changes**: a design update requires editing many places by hand
-- **Unclear ownership**: business logic, styling, layout, and validation all get mixed together
+- **Duplication**: the same structure and rules are copied into many files
+- **Inconsistency**: one version handles disabled state correctly, another does not
+- **Invalid data**: impossible combinations appear because nobody defined what is allowed
+- **Hard-to-track changes**: one visual or behavior change requires editing many places
+- **Unclear ownership**: layout, styling, validation, and business decisions get mixed together
 
-Reusable component design solves this by defining one stable unit with explicit inputs, explicit outputs, and clear boundaries. Instead of rebuilding UI each time, you reuse a controlled transformation: given valid input data, produce predictable UI.
+The core problem is loss of control. Without reuse, data enters the UI through many small ad hoc paths, so change becomes scattered and correctness becomes accidental.
 
 ---
 
@@ -50,121 +52,100 @@ Reusable component design solves this by defining one stable unit with explicit 
 
 ### 1. Single responsibility
 
-A reusable component should do one job well. A `Button` should represent an action trigger, not also manage page layout, data fetching, and navigation rules.
+A reusable component should do one job. A `Button` should represent an action trigger. It should not also decide page layout, fetch server data, and manage unrelated state.
 
-This keeps data flow simple:
-- parent decides when to show the component
-- parent sends the input data
-- component transforms that data into UI
+This keeps flow simple:
 
-When one component owns one concern, change is easier to reason about.
+- parent decides when the component exists
+- parent sends input data
+- component turns that data into UI
 
-### 2. Clear public API
+One responsibility means fewer hidden rules and fewer invalid state combinations.
 
-A reusable component needs a small, explicit interface. That usually means a defined set of inputs, outputs, and allowed states.
+### 2. Small public API
 
-Good API design improves predictability:
-- valid inputs are obvious
-- invalid combinations are limited
-- callers know what they control and what they do not
+The component needs a clear interface: what data comes in, what events go out, and what variations are supported. A small API limits ambiguity.
 
-If the API is vague or too large, reuse becomes fragile because every consumer uses the component differently.
+That improves predictability:
+
+- callers know what they control
+- the component knows what assumptions are safe
+- invalid usage is easier to detect
 
 ### 3. Controlled variation
 
-Reuse does not mean "make one component handle everything." It means support a small number of meaningful variations without losing structure.
+Reuse does not mean one component should handle every possible case. It means the component supports a limited set of meaningful variations, such as size, tone, or status.
 
-Examples of controlled variation:
-- size: small, medium, large
-- status: default, error, success
-- content: label only, label with icon
+This matters because variation is still data. If you allow too many unrelated options, you create combinations that were never designed or tested.
 
-The key idea is that variation should be intentional. If every new need adds another unrelated option, the component becomes unpredictable.
+### 4. Clear state ownership
 
-### 4. Separation of structure from content
+Some data changes over time: open or closed, selected or unselected, loading or idle. Reusable design requires deciding where that changing data lives.
 
-A reusable component often provides structure while the caller provides content. The component defines where data goes; the caller decides which specific data to send.
+The rule is simple: one piece of data should have one clear owner. That owner controls updates, and everyone else reads or reacts to those updates.
 
-This makes flow clearer:
-- component owns layout rules
-- caller owns page-specific values
+### 5. Stable internal rules
 
-That boundary reduces hidden coupling between one screen and the component's internals.
+A reusable component should apply the same transformation every time it receives the same valid input. If an input is invalid, the boundary should make that obvious or prevent it.
 
-### 5. Explicit ownership of state
+This is what makes the component trustworthy. Reuse is not only shared markup. It is shared behavior, shared constraints, and shared valid state transitions.
 
-Some UI data changes over time: open/closed, selected/unselected, loading/idle. Reusable design requires deciding who owns that changing data.
+### 6. Composition over branching
 
-Two common options:
-- the parent owns the state and sends it in
-- the component owns only small local state tied to its own behavior
+When a component starts growing too many special cases, split responsibilities instead of adding more flags. Let one component provide structure and let other pieces provide content.
 
-Correctness depends on this choice. If ownership is unclear, different parts of the UI try to control the same data and drift out of sync.
+Composition keeps data flow explicit:
 
-### 6. Stable internal rules
-
-A reusable component should protect correctness inside its boundary. For example, if a field shows an error message, it should render that message consistently and connect it to the right input.
-
-This means the component is not just visual reuse. It also reuses behavior, constraints, and valid state transitions.
-
-### 7. Composition over special cases
-
-Instead of adding a prop for every possible use case, prefer combining small components. One component can provide a shell; others can provide content or behavior around it.
-
-This keeps control local:
-- each piece has simpler data
-- each piece has fewer invalid states
-- changes affect smaller surfaces
+- outer component controls layout
+- inner pieces control their own content
+- each piece has fewer rules to enforce
 
 ---
 
-## What if we didn't have it
+## What if we didn't have it (Alternatives)
 
 ### 1. Manual page-by-page markup
 
 ```html
-<button class="blue-btn">Save</button>
+<button>Save</button>
 ```
 
-This works once. It breaks when ten pages each define their own button rules, styles, and disabled behavior.
+This works once. It fails when each screen adds different classes, behavior, and accessibility rules by hand.
 
 ### 2. Copy-paste reuse
 
 ```html
-<button class="blue-btn">Save</button>
-<button class="blue-btn">Delete</button>
+<button class="primary">Save</button>
+<button class="primary">Delete</button>
 ```
 
-This looks reusable, but the logic is duplicated, not shared. When behavior changes, you must remember every copy.
+This looks shared, but the logic is still duplicated. Once one copy changes, the others drift.
 
-### 3. One giant configurable component
+### 3. Giant configurable component
 
 ```txt
 Button(
   primary,
-  secondary,
   danger,
-  ghost,
   compact,
   wide,
-  iconLeft,
-  iconRight,
+  rounded,
+  withIcon,
   loading,
-  fullWidth,
-  rounded
+  fullWidth
 )
 ```
 
-This centralizes code but loses control. Too many options create hidden coupling and invalid combinations.
+This centralizes code but weakens correctness. Too many knobs create hidden coupling and invalid combinations.
 
-### 4. Page-specific hacks
+### 4. Page-specific conditional hacks
 
 ```txt
-if screen == "checkout" then buttonPadding = 18
-if screen == "profile" then buttonPadding = 14
+if page == "checkout" then padding = 18
+if page == "profile" then padding = 14
 ```
 
-This ties the component to specific pages. Reuse disappears because the component now knows too much about where it is used.
+Now the component knows too much about where it is used. Reuse breaks because the unit is no longer generic; it is secretly tied to screens.
 
 ---
 
@@ -172,145 +153,141 @@ This ties the component to specific pages. Reuse disappears because the componen
 
 ### 1. Minimal conceptual example
 
-A badge component takes one piece of data, `status`, and turns it into UI.
+A status badge takes one input and produces one output.
 
 ```txt
 input: status = "success"
 output: green badge with text "Success"
 ```
 
-The transformation is simple and predictable: same valid input, same output.
+The same valid input should always produce the same visible result.
 
-### 2. Small code example: clear inputs
+### 2. Small code example: structure vs content
 
-```js
-Badge({ label: "New", tone: "info" })
+```txt
+Badge(label="New", tone="info")
+Badge(label="Sold out", tone="warning")
 ```
 
-The component reads `label` and `tone`. It should not also decide when a product is new. That decision belongs to the caller.
+The component owns the structure of a badge. The caller owns the actual label data.
 
-### 3. Incorrect vs correct ownership
+### 3. Incorrect vs correct variation
 
 Incorrect:
 
-```js
-Modal()
-// internally decides on its own when to open
+```txt
+Button(primary=true, danger=true, ghost=true)
 ```
 
 Correct:
 
-```js
-Modal({ isOpen: true, onClose })
+```txt
+Button(variant="danger")
 ```
 
-Open/closed is changing state. If the parent owns it, the flow is visible and easier to coordinate with the rest of the page.
+The second version encodes variation more clearly, so invalid combinations are harder to create.
 
-### 4. Real-world analogy
+### 4. Incorrect vs correct state ownership
 
-Think of a reusable component like a form template at a bank. The template defines the structure: which fields exist, which values are valid, and where signatures go. Each customer provides different data, but the structure stays stable.
+Incorrect:
 
-That is reuse: same transformation rules, different input values.
+```txt
+Modal()
+```
 
-### 5. Composition instead of branching
+If the modal decides by itself when it opens and closes, the rest of the page cannot coordinate with it.
+
+Correct:
+
+```txt
+Modal(isOpen=true, onClose=...)
+```
+
+Now the changing data has a visible owner, and the flow is explicit.
+
+### 5. Composition example
 
 Less reusable:
 
-```js
-Card({ showHeader: true, showFooter: true, footerText: "Save" })
+```txt
+Card(showHeader=true, headerText="Profile", footerText="Save")
 ```
 
 More reusable:
 
-```js
-Card({
-  header: Title("Settings"),
-  body: Form(),
-  footer: Button({ label: "Save" })
-})
+```txt
+Card(
+  header=Title("Profile"),
+  body=Form(...),
+  footer=Button(label="Save")
+)
 ```
 
-In the second version, the card owns layout. The caller owns what content fills each part.
+The card controls layout. The caller controls what data fills each slot.
 
 ### 6. Browser interaction example
-
-A search input component receives text and emits changes:
 
 ```txt
 parent sends value = "rea"
 user types "c"
-component emits change = "reac"
-parent stores new value
-component re-renders with value = "reac"
+input emits change = "reac"
+parent stores "reac"
+input re-renders with value = "reac"
 ```
 
-The important part is the loop: input data comes in, user action sends new data out, parent updates the source of truth, UI refreshes.
+This shows the full loop: data comes in, user action creates a new value, the owner updates state, and the UI refreshes.
 
-### 7. Invalid vs valid data combinations
+### 7. Real-world analogy
 
-Problematic:
+A shipping label template is reusable because the structure stays fixed while the package data changes. Sender, receiver, and barcode values differ each time, but the placement rules stay the same.
 
-```js
-Button({ loading: true, disabled: false })
-```
-
-Safer:
-
-```js
-Button({ state: "loading" })
-```
-
-The second API reduces impossible combinations by encoding state more explicitly.
-
-### 8. Scaling example
-
-A product card appears on the home page, search page, and favorites page. If each page builds its own version, product name, price, and image rules drift apart. If one reusable `ProductCard` owns those display rules, the same product data is mapped consistently everywhere.
+That is reusable component design: stable structure, variable data, controlled output.
 
 ---
 
 ## Quickfire (Interview Q&A)
 
 **Q: What is reusable component design?**  
-A: It is a pattern for building UI pieces with clear inputs, outputs, and responsibilities so they can be used in multiple places predictably.
+A: It is a way to build UI units with clear inputs, outputs, and responsibilities so the same unit can be used in multiple places predictably.
 
-**Q: Why is reuse valuable?**  
-A: It reduces duplication and keeps behavior, styling, and validation consistent across the app.
+**Q: Why is reusability useful?**  
+A: It reduces duplication and keeps behavior, structure, and correctness rules consistent across screens.
 
 **Q: What makes a component reusable?**  
-A: A focused responsibility, a small API, controlled variation, and clear ownership of changing data.
+A: A narrow responsibility, a small API, controlled variation, and clear ownership of changing data.
 
 **Q: Does reusable mean highly configurable?**  
-A: No. Too much configurability often makes a component harder to understand and easier to misuse.
+A: No. Too much configurability often means the abstraction is weak and easy to misuse.
 
-**Q: What is the biggest design risk?**  
-A: Mixing many responsibilities into one component, which creates hidden coupling and invalid state combinations.
-
-**Q: How do you know a component API is too large?**  
-A: If callers need many flags, special cases, or mutually dependent options, the abstraction is probably unstable.
-
-**Q: Why does state ownership matter?**  
-A: Because the part that owns changing data controls when the UI updates and keeps different views in sync.
+**Q: Why is state ownership important?**  
+A: Because one piece of changing data needs one clear owner, or different parts of the UI will drift out of sync.
 
 **Q: What is the difference between reuse and copy-paste?**  
-A: Reuse shares one controlled implementation; copy-paste duplicates code and lets versions drift apart.
+A: Reuse shares one controlled implementation. Copy-paste duplicates code and lets versions diverge over time.
 
-**Q: How does composition help reuse?**  
-A: It lets a component provide structure while callers supply content, which reduces special-case branching.
+**Q: Why is composition often better than more flags?**  
+A: Composition splits responsibility into smaller units, which reduces invalid combinations and hidden coupling.
 
-**Q: Should reusable components contain business logic?**  
-A: Only the logic directly tied to their UI behavior. Page or domain decisions should usually stay outside.
+**Q: What is a bad sign in a component API?**  
+A: Many boolean flags, screen-specific conditions, or props that only make sense together are signs the design is unstable.
+
+**Q: Can reusable components contain logic?**  
+A: Yes, but mainly logic tied to their own UI behavior and correctness, not broad page or domain decisions.
+
+**Q: How would you explain this in one sentence?**  
+A: Reusable component design is a way to control how UI data becomes UI output so the same building block works reliably in different places.
 
 ---
 
 ## Key Takeaways
 
-- Reusable component design is mainly about controlling how UI data becomes UI output.
-- A reusable component should have one clear responsibility.
-- Small, explicit APIs make components easier to trust and harder to misuse.
+- Reusability is mostly about controlling data flow and state changes.
+- A reusable component should do one job well.
+- A small API is easier to understand, test, and trust.
 - Variation should be intentional, not unlimited.
-- State ownership must be clear or data gets out of sync.
-- Reuse means sharing rules, not just sharing markup.
-- Composition usually scales better than adding more flags.
+- One changing value should have one clear owner.
+- Reuse means sharing rules and behavior, not just markup.
+- Composition usually scales better than adding more special cases.
 
 ---
 
@@ -319,71 +296,65 @@ A: Only the logic directly tied to their UI behavior. Page or domain decisions s
 ### Nouns (concepts)
 
 **Component**  
-A component is a reusable UI unit with inputs, logic, and output. In this topic, it is the main boundary for controlling data and presentation.
+A component is a UI unit with inputs, rules, and output. In this topic, it is the main boundary for controlling how data becomes visible UI.
 
 **API**  
-An API is the public interface of a component: what inputs it accepts and what outputs or events it exposes.
+An API is the public interface of a component: the inputs it accepts and the outputs or events it exposes.
 
 **State**  
 State is data that changes over time, such as open/closed or loading/idle. Reusable design depends on knowing who owns that data.
 
-**Props / inputs**  
-Inputs are values passed into a component so it can render or behave correctly. They should be explicit and valid.
-
-**Output**  
-Output is the rendered UI or emitted event produced by the component after it processes input data.
-
 **Variant**  
-A variant is a supported version of a component, such as size or visual tone. Good variants are limited and intentional.
+A variant is a supported version of a component, such as `small`, `large`, or `danger`. Good variants are limited and intentional.
 
 **Boundary**  
-A boundary is the line between what the component controls and what the caller controls. Clear boundaries improve predictability.
+A boundary is the line between what the component controls and what its caller controls. Clear boundaries improve predictability.
 
 **Composition**  
-Composition is combining smaller UI pieces to build larger ones. It helps reuse by keeping each piece focused.
+Composition means combining smaller pieces into a larger UI structure. It helps reuse by keeping each piece focused.
 
 **Source of truth**  
-The source of truth is the single place where the current value of some data is stored. Reusable components work better when this is clear.
+The source of truth is the single place where the current value of some data is stored. Reusable components work best when that source is explicit.
 
 **Coupling**  
-Coupling is how strongly two parts of a system depend on each other. High coupling makes reuse and change harder.
+Coupling is the degree to which two parts depend on each other. High coupling makes reuse harder because changes spread across many places.
 
 ### Verbs (actions)
 
 **Render**  
-To render is to turn data into visible UI output. Reusable components render predictably from valid inputs.
+To render is to transform input data into visible UI output. Reusable components should render predictably from valid input.
 
 **Compose**  
-To compose is to combine smaller units into a larger structure. This is a common way to avoid giant components.
+To compose is to combine smaller units into a larger one. This is a common way to avoid giant, fragile components.
 
 **Emit**  
-To emit is to send an event or signal outward, usually in response to user interaction. This is how components communicate changes.
+To emit is to send an event or signal outward, usually after user interaction. This is one of the main output flows from a component.
 
 **Derive**  
-To derive is to calculate one value from another. For example, a visual state may be derived from input data.
+To derive is to compute one value from another. For example, a visual state can be derived from a status input.
 
 **Validate**  
-To validate is to check whether input data or state combinations are allowed. Reusable components often enforce these rules.
+To validate is to check whether incoming data or state combinations are allowed. Validation protects correctness at the component boundary.
 
 **Reuse**  
-To reuse is to apply the same controlled component in different contexts without rewriting its core logic.
+To reuse is to apply the same controlled component in different contexts without rewriting its core rules.
 
 ### Adjectives (properties)
 
 **Reusable**  
-Reusable means the component can serve multiple contexts without custom rewriting and without losing correctness.
+Reusable means the same unit can serve multiple contexts without custom rewriting and without losing correctness.
 
 **Predictable**  
-Predictable means the same valid input leads to the same behavior and output. This is a core goal of good component design.
+Predictable means the same valid input produces the same behavior and output. This is one of the main goals of good component design.
 
 **Explicit**  
-Explicit means data flow and control are visible rather than hidden. Explicit APIs are easier to understand in interviews and in code.
+Explicit means the data flow and control are visible rather than hidden. Explicit APIs are easier to reason about in both code and interviews.
 
 **Coupled**  
-Coupled describes parts that depend heavily on each other's internals. Highly coupled components are hard to reuse safely.
+Coupled describes parts that depend heavily on each other's internals. Highly coupled components are harder to change safely.
 
 **Monolithic**  
-Monolithic means one component handles too many concerns at once. That usually hurts clarity and reuse.
+Monolithic means one component handles too many concerns at once. That usually makes reuse weaker and bugs harder to track.
 
 **Consistent**  
-Consistent means the same rules produce the same result across screens and features. Reusable components are a practical way to get consistency.
+Consistent means the same rules produce the same result across different screens and features. Reusable components are a practical way to achieve that.

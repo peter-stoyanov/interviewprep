@@ -1,367 +1,343 @@
 # Container vs Presentational Components
 
-**Abstraction level**: pattern
-**Category**: frontend architecture / component design
-
----
+**Abstraction level**: pattern  
+**Category**: frontend architecture
 
 ## Related Topics
 
-- **Implementations of this**: React component structure, smart vs dumb components
-- **Depends on this**: props vs state, event handling, data fetching
-- **Works alongside**: component composition, separation of concerns, state management
-- **Contrast with**: monolithic components, feature-based components, MVVM-style UI layers
-- **Temporal neighbors**: learn component basics first; next study lifting state up and shared state
-
----
+- **Implementations of this**: smart vs dumb components
+- **Depends on this**: props vs state
+- **Works alongside**: component composition
+- **Works alongside**: separation of concerns
+- **Contrast with**: monolithic components
+- **Contrast with**: MVC and MVVM UI layering
+- **Temporal neighbors**: lifting state up
+- **Temporal neighbors**: local vs global state
 
 ## What is it
 
-Container vs presentational components is a UI design pattern that splits components by responsibility. A container component deals with data, state, side effects, and decisions. A presentational component deals with rendering data and sending user events upward. The goal is to separate how data is managed from how data is shown.
+Container vs presentational components is a pattern for splitting UI components by responsibility. A container component controls data that changes over time: loading it, storing it, transforming it, and deciding what happens when the user interacts. A presentational component focuses on displaying data and reporting user actions. The pattern is mainly about making data flow and ownership obvious.
 
 In simple terms:
 
-- **Data**: domain data such as users, products, loading flags, error messages, selected items
-- **Where it lives**: usually in browser memory, often near the part of the UI that owns it
-- **Who reads/writes it**: containers read and update the data; presentational components mostly read it and emit events
-- **How it changes over time**: data is fetched, validated, filtered, selected, or updated in the container, then passed down again for rendering
-
----
+- **Data**: lists, selected items, loading flags, error messages, filtered results, form values
+- **Where it lives**: usually in browser memory inside the UI layer
+- **Who reads/writes it**: containers read and update important state; presentational components mostly read input and send events upward
+- **How it changes over time**: user input, network responses, validation, filtering, and selection change the state; the new state is then rendered again
 
 ## What problem does it solve
 
-Start with a simple screen that shows a list of users. At first, one component can do everything: fetch users, track loading, filter the list, and render buttons. That works while the screen is small.
+Start with a simple screen: show a list of users and let the user select one. At first, one component can do everything. It can load the users, remember the selected user, filter the list, and render the buttons.
 
-Then the screen grows. Now it must handle errors, retries, sorting, empty states, and a selected user. If one component owns all of this, data and UI rules get mixed together:
+That is still manageable while the screen is small. Then more rules appear:
 
-- the fetch logic sits next to markup
-- the filtering logic is buried inside rendering code
-- button clicks directly mutate local values
-- loading and error rules are spread across many branches
+- show loading and error states
+- disable some users
+- sort active users first
+- retry failed requests
+- show different empty states
 
-This creates common failure modes:
+Now one component is doing four different jobs at once:
 
-- **Duplication**: multiple screens repeat the same fetch or transformation logic
-- **Inconsistency**: two components render the same data differently because each applies its own rules
-- **Invalid data**: the UI may render incomplete or mismatched values because no single place validates them
-- **Hard-to-track changes**: it becomes unclear which event changed the data
-- **Unclear ownership**: no one component clearly owns the state, so updates happen from too many places
+- storing changing data
+- transforming raw data into display-ready data
+- deciding what happens after user actions
+- rendering markup
 
-The pattern solves a control problem: who owns the data, who transforms it, and who only displays it.
+Without a clear split, common failures appear:
 
----
+- **Duplication**: the same filtering or mapping logic gets repeated in multiple views
+- **Inconsistency**: one part of the UI sorts or labels data differently from another
+- **Invalid data**: the UI starts rendering half-prepared data because no single place finishes the transformation
+- **Hard-to-track changes**: it is unclear which click or network response changed the state
+- **Unclear ownership**: too many components update the same data, so no single source of truth exists
+
+The pattern solves a control problem: who owns the data, who changes it, and who only shows it.
 
 ## How does it solve it
 
-### 1. Separate data control from rendering
+### 1. Separate control from display
 
-A container owns the changing data and the rules around it. A presentational component receives already-prepared data and focuses on output. This makes the data flow explicit: state and actions move down as inputs, user events move up as signals.
+The container handles the part of the system that changes over time. The presentational component handles the part that turns current data into visible output. This makes the split between "change the data" and "show the data" explicit.
 
-### 2. Give one place ownership of state
+### 2. Put state ownership in one place
 
-The container becomes the source of truth for the part of the UI it manages. If the selected tab, loading flag, or filtered list changes, there is one obvious place to inspect. That improves predictability because state transitions are centralized.
+If selected user, loading status, or current filter changes, there should be one obvious owner. The container becomes that owner. This improves predictability because state transitions happen in one place instead of being scattered across the tree.
 
-### 3. Keep presentational components pure about intent
+### 3. Push prepared data downward
 
-A presentational component does not decide where data comes from or how it is stored. It gets values and event handlers, then renders the valid UI for those values. This reduces hidden coupling because the view does not depend on fetch timing, storage details, or business rules.
+The presentational component should receive data that is already in a useful shape. Instead of giving it raw records and asking it to figure everything out, the container can pass final labels, sorted lists, booleans for enabled or disabled state, and display-ready values.
 
-### 4. Make transformations explicit
+### 4. Pull user intent upward
 
-Containers can convert raw data into display-ready data before passing it down. For example, a container can map a user record into `fullName`, `isDisabled`, and `statusLabel`. That keeps transformation logic in one place instead of scattering it across templates.
+The presentational component should not decide business behavior. It reports intent such as "user clicked retry" or "user selected item 42". The container receives that signal and decides how state should change.
 
-### 5. Improve reuse through narrower responsibilities
+### 5. Keep transformations explicit
 
-A presentational component can be reused with different data sources because it only needs a defined shape of input. A container can also be replaced without rewriting the view, as long as it still provides the same props and handles the same events.
+Filtering, sorting, validation, and derivation are easier to reason about when they happen in the container. That keeps transformation logic out of rendering code and makes correctness easier to check.
 
-### 6. Make testing simpler
+### 6. Narrow component responsibilities
 
-You can test containers for control logic: data fetching, state transitions, validation, derived values. You can test presentational components for output logic: given valid input, do they render the right UI and emit the right events. Each part has a smaller correctness surface.
-
----
+A presentational component can often be reused with different data sources because it only needs a known input shape. A container can change how data is fetched or derived without changing the view, as long as it still provides the same inputs and handles the same events.
 
 ## What if we didn't have it (Alternatives)
 
 ### 1. One component does everything
 
+```text
+UserList:
+- load users
+- store loading and error
+- filter users
+- render table
+- handle selection
+```
+
+This is the common beginner approach. It works until changes in data rules and changes in UI layout start interfering with each other. The file becomes harder to read because storage, transformation, control, and rendering are mixed together.
+
+### 2. Let the view decide data rules
+
 ```jsx
-function UserList() {
-  // fetch users
-  // store loading/error/filter
-  // filter users
-  // render table and buttons
+function UserListView({ users }) {
+  const visibleUsers = users.filter(isActive)
+  return renderList(visibleUsers)
 }
 ```
 
-This is the common beginner approach. It works at first, then breaks when UI rules and data rules grow together. The component becomes hard to read because flow, transformation, and rendering are mixed in one place.
+This looks convenient, but now the display layer owns an important rule. If another view needs the same rule, duplication starts. If the rule changes, it can drift across components.
 
-### 2. Each child fetches its own data
+### 3. Let every child fetch or shape its own data
 
-```jsx
-<UserCard id="1" />
-<UserCard id="2" />
-<UserCard id="3" />
+```text
+UserCard(1) loads user 1
+UserCard(2) loads user 2
+UserCard(3) loads user 3
 ```
 
-If each `UserCard` loads and shapes its own data, ownership is fragmented. You get duplicated requests, inconsistent loading states, and no clear control over when the screen is considered ready.
+This creates fragmented ownership. Loading state becomes scattered, requests can duplicate, and the screen no longer has one clear place that says "this is the current state of the page".
 
-### 3. Presentational component mutates data directly
+### 4. Mutate shared data during rendering
 
 ```jsx
-function UserTable({ users }) {
-  users.sort(byName)
-  users.push(tempRow)
-  return ...
+function ProductTable({ products }) {
+  products.sort(byPrice)
+  return renderRows(products)
 }
 ```
 
-This quick hack hides transformations inside rendering. The caller can no longer trust its own data, and correctness becomes fragile because display code changes shared values.
-
-### 4. Shared global values with no local boundary
-
-```jsx
-function ProductGrid() {
-  const products = globalStore.products
-  globalStore.filter = "sale"
-  return ...
-}
-```
-
-This can remove duplication, but it often replaces local clarity with hidden coupling. The component depends on external mutable state, so it becomes harder to understand who changed what and why.
-
----
+This is a quick hack that hides transformation inside display code. Other parts of the system can no longer trust the original data, and debugging becomes harder because rendering changes state implicitly.
 
 ## Examples
 
-### 1. Minimal concept: owner and viewer
-
-The container is the owner of changing data. The presentational component is the viewer of that data.
+### 1. Minimal concept
 
 ```text
-Container: holds count = 3
-Presentational: shows "3" and a "+" button
+Container owns: count = 3
+View shows: "3" and an Increment button
 ```
 
-When the user clicks `+`, the presentational component emits an event. The container updates `count` to `4` and sends the new value back down.
+When the button is clicked, the view sends "increment". The container changes `count` to `4` and sends the new value back down.
 
-### 2. Small code snippet: list rendering
+### 2. Small code example
 
 ```jsx
-function UserListView({ users, onSelectUser }) {
+function UserListView({ users, onSelect }) {
   return users.map(user =>
-    <button onClick={() => onSelectUser(user.id)}>
+    <button onClick={() => onSelect(user.id)}>
       {user.name}
     </button>
   )
 }
 ```
 
-`UserListView` does not know where `users` came from. It only receives data and sends back the selected `id`.
+This component does not know where `users` came from. It only renders data and emits user intent.
 
-### 3. Container preparing display data
+### 3. Container preparing data
 
 ```jsx
-function UserListContainer() {
-  const users = loadUsers()
-  const visibleUsers = users.filter(u => u.active)
-  return <UserListView users={visibleUsers} />
+function UserListContainer({ users }) {
+  const visibleUsers = users.filter(user => user.active)
+  return <UserListView users={visibleUsers} onSelect={selectUser} />
 }
 ```
 
-The container performs the transformation from raw data to display-ready data. The view stays simple because it only renders active users.
+The container takes raw data, applies a rule, and passes the result down. The view stays focused on output.
 
-### 4. Incorrect vs correct responsibility split
+### 4. Incorrect vs correct split
 
-**Incorrect**
+Incorrect:
 
 ```jsx
-function UserListView({ users }) {
-  const visibleUsers = users.filter(u => u.active)
-  const sortedUsers = visibleUsers.sort(byName)
-  return ...
+function OrderTableView({ orders }) {
+  const validOrders = orders.filter(order => order.status !== "cancelled")
+  return renderTable(validOrders)
 }
 ```
 
-This mixes rendering with important data rules. The same component may be forced to know filtering and sorting policy.
-
-**Correct**
+Correct:
 
 ```jsx
-function UserListContainer() {
-  const sortedUsers = users.filter(u => u.active).sort(byName)
-  return <UserListView users={sortedUsers} />
+function OrderTableContainer({ orders }) {
+  const validOrders = orders.filter(order => order.status !== "cancelled")
+  return <OrderTableView orders={validOrders} />
 }
 ```
 
-Now the data transformation is controlled in one place, and the view receives valid final input.
+The difference is ownership. In the correct version, the business rule lives in the control layer, not the display layer.
 
-### 5. Real-world analogy: kitchen and waiter
-
-- The kitchen decides how ingredients become a finished dish.
-- The waiter delivers the dish and sends customer requests back.
-
-The waiter should not decide recipe rules, and the kitchen should not be concerned with table layout. That is the same split: control and transformation in one place, presentation and event delivery in another.
-
-### 6. Browser interaction: search box
+### 5. Browser interaction flow
 
 ```text
 User types "ann"
-SearchContainer stores query = "ann"
-SearchContainer derives matching users
-SearchView renders input value and result list
-SearchView sends "input changed" events upward
+Search container stores query = "ann"
+Search container derives matching users
+Search view renders input value and result list
 ```
 
-The flow is explicit: input event up, state update in the container, derived data down.
+Flow is explicit:
 
-### 7. Reuse with different data sources
+- input event goes up
+- state changes in one place
+- derived data comes back down
+
+### 6. Same view, different containers
 
 ```jsx
-<ProductTableView products={featuredProducts} />
-<ProductTableView products={searchResults} />
+<ProductGridView products={featuredProducts} onSelect={openProduct} />
+<ProductGridView products={searchResults} onSelect={openProduct} />
 ```
 
-The same presentational component can render two different datasets because it only depends on the input shape, not on how the data was fetched or derived.
+The same presentational component can show different datasets because it depends on input shape, not on where the data came from.
 
----
+### 7. Real-world analogy
+
+```text
+Kitchen: decides ingredients, recipe, timing
+Waiter: carries finished dish and carries requests back
+```
+
+The kitchen is like the container: it owns transformation and control. The waiter is like the presentational component: it displays the result and passes intent back.
 
 ## Quickfire (Interview Q&A)
 
 ### 1. What is a container component?
 
-A container component manages data, state, and behavior for part of the UI. It usually prepares data and passes it down to other components.
+A container component owns changing data and control logic for part of the UI. It decides how state changes and what data the view receives.
 
 ### 2. What is a presentational component?
 
-A presentational component focuses on rendering UI from input data. It usually emits user events but does not own the main business logic.
+A presentational component renders UI from input data and reports user actions. Its main job is display, not business control.
 
-### 3. Why separate them?
+### 3. Why use this pattern?
 
-The separation makes data flow clearer and reduces coupling. One part controls change; the other part controls display.
+It makes ownership, data flow, and state transitions easier to see. That usually reduces coupling and makes the UI easier to change.
 
-### 4. Is this pattern about specific frameworks?
+### 4. Is this tied to one framework?
 
-No. It is a design pattern for UI responsibility, not a specific library feature.
+No. It is a design pattern for UI structure, not a framework feature.
 
-### 5. What data usually belongs in the container?
+### 5. What usually belongs in the container?
 
-State that changes over time, derived values, loading and error flags, and side-effect coordination usually belong there.
+State, derived data, validation rules, loading and error handling, and action handling usually belong there.
 
-### 6. What data usually belongs in the presentational component?
+### 6. What usually belongs in the presentational component?
 
-Input values needed to render the UI and callbacks for user actions. It should not need storage or fetching details.
+Markup, visual structure, and event emission belong there. It should mostly work from the inputs it receives.
 
-### 7. Is a presentational component always stateless?
+### 7. Does a presentational component have to be completely stateless?
 
-No. It can have small local UI state, such as whether a dropdown is open, if that state is purely about display and not shared control logic.
+No. It can hold small UI-only state, such as whether a dropdown is open, if that state does not become shared business state.
 
-### 8. What is the main trade-off of this pattern?
+### 8. What is the biggest benefit in interviews to mention?
 
-It can add more files and indirection. For small screens, the split may feel heavier than necessary.
+Clear ownership of changing data. Once ownership is clear, correctness and debugging both improve.
 
-### 9. How does this pattern help testing?
+### 9. What is the trade-off?
 
-It lets you test control logic separately from rendering logic. That usually produces smaller and more focused tests.
+It can introduce more files or more indirection. For very small components, the split may be more ceremony than value.
 
-### 10. How is this different from a monolithic component?
+### 10. How is it different from a monolithic component?
 
-A monolithic component mixes fetching, transformation, state updates, and rendering in one place. The pattern separates those concerns.
-
-### 11. Is this pattern still useful if modern tools can do more?
-
-Yes. Even if tools change, the underlying idea of clear ownership and explicit data flow remains useful.
-
-### 12. When should you avoid overusing it?
-
-If a component is tiny and its data rules are trivial, splitting it may create ceremony without much benefit.
-
----
+A monolithic component mixes control and display in one place. This pattern separates them so each part has a narrower job.
 
 ## Key Takeaways
 
-- Container vs presentational components is a way to control how UI data changes.
-- Containers own changing data and important state transitions.
-- Presentational components render data and emit user intent.
-- The pattern makes data flow easier to trace.
-- Transform raw data before it reaches the view.
-- Clear ownership reduces duplication and inconsistency.
-- The split improves reuse, testing, and maintainability.
-- Use the pattern when complexity justifies the extra structure.
-
----
+- This pattern is a way to control how UI data changes.
+- Containers own important changing state.
+- Presentational components focus on rendering and user intent.
+- Data should usually flow down; events should usually flow up.
+- Transformation logic is easier to reason about when it is explicit.
+- Clear ownership reduces duplication and inconsistent behavior.
+- Reuse becomes easier when display code depends on input shape, not data source.
+- Use the pattern when screen logic is complex enough to justify the split.
 
 ## Vocabulary
 
 ### Nouns (concepts)
 
 **Container component**  
-A component responsible for state, data loading, coordination, and transformation. In this pattern, it is the control layer for a part of the UI.
+A component that owns state, transformations, and action handling for a part of the UI. It is the control layer in this pattern.
 
 **Presentational component**  
-A component responsible for displaying data and exposing user actions. It is the view layer in this pattern.
+A component that displays data and emits user actions. It is the view layer in this pattern.
 
 **State**  
-Data that can change over time, such as loading flags, selected items, or form values. The container often owns the important state.
+Data that can change over time, such as selected item, loading flag, or current filter. Containers usually own the important state.
 
 **Props**  
-Inputs passed from one component to another. Presentational components typically depend on props for the data they render.
+Inputs passed from one component to another. Presentational components typically receive most of what they need through props.
 
 **Source of truth**  
-The authoritative place where a value is owned and updated. This pattern tries to make that ownership explicit.
+The single place that is allowed to own and update a value. This pattern tries to make that place obvious.
 
 **Derived data**  
-Data computed from other data, such as filtered lists or formatted labels. Containers often create derived data before rendering.
+Data computed from other data, such as a filtered list or formatted label. Containers often derive data before passing it to the view.
 
 **Event**  
-A signal that something happened, such as a click or input change. Presentational components emit events so containers can decide what to do next.
-
-**Side effect**  
-Work that affects the outside world or depends on it, such as fetching data or writing to storage. These usually belong in the container side of the split.
+A signal that something happened, such as a click or text input. Presentational components emit events so containers can decide the next state.
 
 **Responsibility**  
-The specific job a component owns. This pattern works by narrowing responsibilities instead of mixing them.
+The specific job a component owns. The pattern works by making each component responsible for fewer things.
 
 **Coupling**  
-How strongly one part depends on another part's internal details. Lower coupling makes components easier to reuse and change.
+How much one part depends on another part's internal details. Lower coupling makes components easier to reuse and change.
 
 ### Verbs (actions)
 
 **Render**  
-To turn input data into UI output. Presentational components mainly do this.
-
-**Fetch**  
-To request data from an external source. This is typically container work because it changes state over time.
-
-**Transform**  
-To map raw data into a shape better suited for display. This keeps the view simpler and more predictable.
-
-**Pass down**  
-To send data or callbacks from a parent component to a child component. This is the main downward flow in the pattern.
-
-**Emit**  
-To send an event upward when the user interacts with the UI. Presentational components emit intent rather than mutate shared data directly.
+To turn current data into visible UI. This is the main job of a presentational component.
 
 **Own**  
-To be the place that controls and updates a value. Containers usually own the important screen state.
+To be the place that controls and updates a value. Containers usually own important screen state.
+
+**Transform**  
+To change data into a more useful shape, such as sorting, filtering, or formatting it. This is easier to reason about when done before rendering.
+
+**Derive**  
+To calculate new data from existing data. Derived data should usually be created explicitly, not hidden inside markup.
+
+**Pass down**  
+To send data or callbacks from a parent to a child component. This is the main direction of data flow here.
+
+**Emit**  
+To send a signal upward that the user did something. A presentational component emits intent instead of directly changing shared state.
 
 ### Adjectives (properties)
 
 **Presentational**  
-Focused on display rather than control logic. A presentational component should be easy to understand from its inputs alone.
+Focused on showing data rather than controlling it. A presentational component should be understandable from its inputs.
 
 **Stateful**  
-Holding data that can change over time. Container components are often stateful because they manage transitions.
+Holding data that changes over time. Containers are often stateful because they manage transitions.
 
 **Reusable**  
-Easy to use in different contexts without rewriting internal logic. Presentational components become more reusable when they only depend on input shape.
+Easy to use in multiple places without changing internal logic. Presentational components become more reusable when they depend only on input shape.
 
 **Predictable**  
-Easy to reason about because data flow and ownership are explicit. This is one of the main benefits of the pattern.
-
-**Coupled**  
-Dependent on external details or hidden assumptions. The pattern tries to reduce this by separating control from rendering.
+Easy to reason about because ownership and flow are explicit. This is one of the main goals of the pattern.
 
 **Implicit**  
-Not clearly stated in the code. Hidden ownership and hidden mutations are implicit and therefore harder to reason about.
+Hidden rather than directly stated in the structure. Implicit ownership and implicit mutation usually make bugs harder to find.
 
 **Explicit**  
-Clearly visible in the code structure. Containers make state ownership and data transformations more explicit.
+Clearly visible in the code structure. Explicit ownership and explicit flow make UI behavior easier to explain in an interview.

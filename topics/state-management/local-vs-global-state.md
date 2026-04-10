@@ -1,126 +1,125 @@
 # Local vs Global State
 
-**Abstraction level**: concept / pattern  
+**Abstraction level**: concept / pattern
 **Category**: frontend state management
 
 ---
 
 ## Related Topics
 
-- **Implementations of this**: component state, shared stores, context systems, signals-based stores
-- **Depends on this**: state management in SPA apps, derived state, UI synchronization
-- **Works alongside**: props, events, data fetching, caching
-- **Contrast with**: server state, props vs state, local mutation via plain variables
-- **Temporal neighbors**: learn props and component composition before this; then learn broader state management patterns
+- **Implementations of this**: Context API, Redux, Zustand
+- **Depends on this**: props vs state
+- **Works alongside**: derived state, data fetching, routing
+- **Contrast with**: server state, props drilling, persistent storage
+- **Temporal neighbors**: state management in SPA apps, unidirectional data flow
 
 ---
 
 ## What is it
 
-Local vs global state is a way to decide how far a piece of data needs to reach inside an application. Local state belongs to one small part of the UI and is changed there. Global state is shared across multiple distant parts of the app and must stay consistent everywhere. The core question is not "where can I store this?" but "who needs to read it, who can change it, and how long must it stay valid?"
+Local vs global state is a way to decide how widely a piece of data should be shared inside an application. Local state belongs to one small UI area. Global state belongs to the application as a whole because multiple distant parts need the same current value. In simple terms, it is a rule for matching the scope of data to the scope of the parts that read and change it.
 
-- **Data**: input text, open/closed flags, selected tab, current user, shopping cart, theme, notifications
-- **Where it lives**: usually browser memory on the client side; local state lives near one component or feature, global state lives at application scope
-- **Who reads/writes it**: local state is read and written by one owner; global state is read by many parts and updated through controlled shared paths
-- **How it changes over time**: user actions, server responses, timers, and navigation events move state from one valid value to another
+- **Data**: input text, open/closed flags, selected item, current user, cart items, active filter
+- **Where it lives**: usually in browser memory while the app is running
+- **Who reads/writes it**: one component or feature reads local state; many features may read global state
+- **How it changes over time**: user actions, navigation, timers, and server responses move it from one valid value to another
 
 ---
 
 ## What problem does it solve
 
-Start with a simple case: a search input has some text. Only the search box cares about that text while the user types, so keeping it local is simple and safe.
+Start with a simple case: a modal has an `isOpen` flag. One button changes it, and one modal reads it. Keeping that data local is simple because ownership is obvious.
 
-Now the app grows. The same data may need to be shown in the header, a sidebar, a content area, and a settings screen. If each place keeps its own copy, the copies drift apart. One part updates, another stays stale, and a third uses an invalid value because nobody knows which copy is the real one.
+Now the app grows. A selected filter may affect the page header, results list, URL, and export button. If each place stores its own copy, the copies drift apart. One part updates, another stays stale, and nobody knows which value is the real one.
 
-Without a clear local-vs-global decision, common problems appear:
+Without a clear local-vs-global decision, common failures appear:
 
-- **Duplication**: the same logical data is stored in multiple places
-- **Inconsistency**: one part of the UI shows old data while another shows new data
-- **Invalid data**: one copy is updated without updating related values
-- **Hard-to-track changes**: many places can change the same thing, so bugs become timing and ownership problems
-- **Unclear ownership**: developers cannot tell which part of the app is responsible for correctness
+- **Duplication**: the same logical fact is stored in multiple places
+- **Inconsistency**: different screens show different versions of the same data
+- **Invalid data**: one part updates a value without updating related values
+- **Hard-to-track changes**: many places can write the same state, so bugs become hard to trace
+- **Unclear ownership**: developers cannot tell who is responsible for keeping the data correct
 
-This concept solves the problem by matching the scope of the state to the scope of the consumers. Keep data close when only one place needs it. Share data centrally when many places must agree on it.
+This concept solves the problem by asking one practical question: how many places must agree on this value right now?
 
 ---
 
 ## How does it solve it
 
-### Principle 1: Scope follows usage
+### 1. Scope matches usage
 
-If one component or one small feature is the only reader, keep the state local. If many distant parts of the app need the same value, move it to a shared location.
+Keep state local when only one small area needs it. Move it to global scope when many distant parts need to read the same value.
 
-- **Data flow**: local state flows inside one small area; global state flows outward to many readers
-- **Control**: fewer readers means simpler control; more readers require a shared contract
-- **Predictability**: the chosen scope matches the actual usage of the data
+- **Data flow**: short path for local data, shared path for app-wide data
+- **Control**: fewer readers and writers when the scope is small
+- **Predictability**: the storage location matches actual usage
 
-### Principle 2: Ownership must be explicit
+### 2. Ownership is explicit
 
-Every piece of state should have a clear owner. The owner is the place responsible for creating it, validating it, and deciding how it changes.
+Every piece of state should have a clear owner. The owner decides what values are valid and how changes happen.
 
-- **Data flow**: readers consume data from the owner instead of inventing copies
-- **Control**: changes go through the owner, not through random side paths
-- **Predictability**: when something looks wrong, you know where to inspect first
+- **Data flow**: readers get data from one owner instead of making copies
+- **Control**: writes happen through known paths
+- **Predictability**: when data is wrong, there is one place to inspect first
 
-### Principle 3: Share only what must be shared
+### 3. One fact should have one source of truth
 
-Global state is useful, but it has a cost. The more data becomes global, the more parts of the app become coupled to each other.
+If many parts need the same fact, store it once and let the rest read or derive from it. Do not keep parallel copies of the same meaning.
 
-- **Data flow**: unnecessary global state sends updates farther than needed
-- **Control**: more shared data means more rules and more coordination
-- **Predictability**: a small local change should not trigger app-wide complexity
+- **Data flow**: one source, many readers
+- **Control**: fewer manual sync steps
+- **Predictability**: fewer contradictions between UI parts
 
-### Principle 4: One logical value should have one authoritative source
+### 4. Share only what must be shared
 
-If a value is shared, keep one source of truth for it. Other values that can be computed from it should usually be derived, not stored separately.
+Global state is useful, but it increases coupling. Making everything global spreads changes farther than necessary.
 
-- **Data flow**: readers pull from one source instead of syncing multiple copies
-- **Control**: updates happen once, at the source
-- **Predictability**: fewer duplicated values means fewer mismatch bugs
+- **Data flow**: unnecessary updates travel through more of the app
+- **Control**: more shared data means more coordination rules
+- **Predictability**: small UI details stay isolated instead of affecting unrelated areas
 
-### Principle 5: State should move upward only when needed
+### 5. Separate temporary data from shared committed data
 
-A common progression is local first, then shared later if requirements grow. This keeps the design simple at the beginning and avoids global state that exists "just in case."
+Some data is only a local draft. Some data is the shared current truth of the app.
 
-- **Data flow**: start narrow, widen only when more readers appear
-- **Control**: state promotion is a deliberate design step
-- **Predictability**: complexity is added in response to real usage, not speculation
+- **Data flow**: draft values stay local until confirmed
+- **Control**: validation can happen before shared data changes
+- **Predictability**: the app can distinguish "editing" from "saved"
 
 ---
 
 ## What if we didn't have it (Alternatives)
 
-### 1. Keep separate local copies everywhere
+### 1. Separate local copies everywhere
 
 ```txt
-Header.userName = "Ana"
-Profile.userName = "Ana"
-Settings.userName = "Ana"
+Header.filter = "open"
+Sidebar.filter = "open"
+Table.filter = "closed"
 ```
 
-This looks simple until one screen updates the name and the others do not. The problem is duplicated data with no synchronization rule.
+This starts simple but breaks as soon as one copy changes and the others do not. The app now has duplication with no control over consistency.
 
-### 2. Put everything in one giant shared object
+### 2. Put everything in one shared state object
 
 ```txt
 appState = {
-  modalOpen: false,
-  inputValue: "",
-  hoveredRow: 3,
   currentUser: {...},
-  cart: [...]
+  cart: [...],
+  tooltipVisible: true,
+  hoveredRow: 4
 }
 ```
 
-This removes some duplication but creates a different problem: tiny UI details now live beside app-wide data. Unrelated parts become coupled, and the shared state becomes noisy and hard to reason about.
+This avoids some duplication, but tiny local UI details now become global concerns. Unrelated parts become coupled to data they should not care about.
 
-### 3. Pass everything manually through many layers
+### 3. Pass data manually through many layers
 
 ```txt
-App -> Layout -> Page -> Panel -> Widget
+App -> Layout -> Page -> Panel -> Button
 ```
 
-If only `Widget` needs the value, passing it through four intermediaries adds wiring and accidental coupling. Those middle layers now know about data they do not actually use.
+If only `Button` needs the value, the middle layers become wiring. This creates hidden coupling because components that do not use the data still depend on it.
 
 ### 4. Use plain mutable variables
 
@@ -128,39 +127,49 @@ If only `Widget` needs the value, passing it through four intermediaries adds wi
 let currentUser = null
 ```
 
-This allows easy writes, but it gives no structure for who is allowed to change the value or how readers are notified. The data exists, but the flow and control are implicit.
+This makes writes easy, but control is weak. Any code can change the value, and readers may not know when it changed or whether it is still valid.
 
 ---
 
 ## Examples
 
-### Example 1: Local state for an input
+### 1. Minimal conceptual example
 
-A text field stores the current typed value while the user edits it.
-
-```txt
-searchText = "lap"
-```
-
-Only the search box needs this while typing, so local state is enough. The data is short-lived and owned by one UI area.
-
-### Example 2: Global state for the current user
-
-The header, account page, and permissions checks all need the logged-in user.
+A tooltip has one piece of data:
 
 ```txt
-currentUser = { id: 7, name: "Ana", role: "admin" }
+isVisible = false
 ```
 
-If each screen stores its own copy, they can disagree. This is shared identity data, so one global source is more correct.
+One small UI area reads it and one hover event changes it. This is local state because the data is short-lived and isolated.
 
-### Example 3: Bad local duplication vs good sharing
+### 2. Small code example
+
+```js
+const dialogState = { isOpen: false }
+
+function openDialog() {
+  dialogState.isOpen = true
+}
+```
+
+The important idea is not the syntax. The important idea is that one owner controls one small piece of data.
+
+### 3. Shared current user
+
+```txt
+currentUser = { id: 7, role: "admin" }
+```
+
+If the header, profile page, and permission checks all need this value, keeping separate copies is dangerous. This is a good candidate for global state because many distant readers must agree on one current identity.
+
+### 4. Incorrect vs correct cart count
 
 Incorrect:
 
 ```txt
 CartIcon.count = 2
-CheckoutPage.count = 3
+Checkout.count = 3
 ```
 
 Correct:
@@ -168,192 +177,157 @@ Correct:
 ```txt
 cartItems = [a, b, c]
 CartIcon.count = cartItems.length
-CheckoutPage.count = cartItems.length
+Checkout.count = cartItems.length
 ```
 
-The correct version stores the real data once and derives the displayed count from it.
+The correct version stores the real data once and derives the display value from it.
 
-### Example 4: Local state promoted to global state
+### 5. Local draft vs shared saved value
 
-At first, a selected language only affects one settings panel.
+```txt
+draftEmail = "ana@new.com"
+savedEmail = "ana@old.com"
+```
+
+While the user is typing, the draft can stay local. After validation and save, the shared saved value changes. This keeps temporary edits separate from app-wide truth.
+
+### 6. State promoted from local to global
+
+At first:
 
 ```txt
 settingsPanel.language = "en"
 ```
 
-Later, the whole app must re-render text in the chosen language. The same data now affects many screens, so it becomes global:
+Later the whole app must use the selected language:
 
 ```txt
 app.language = "en"
 ```
 
-The important idea is not the mechanism. The important idea is that the scope changed.
+The key idea is that the data itself did not change much, but its audience changed.
 
-### Example 5: Real-world analogy
+### 7. Real-world analogy
 
-A sticky note on one engineer's desk is local state. A whiteboard in the team room is global state.
+A sticky note on one desk is local state. A schedule board for the whole team is global state.
 
-- The sticky note is fast and private, but nobody else sees updates.
-- The whiteboard is shared and visible, but it should contain only information the team really needs.
+- The sticky note is private and easy to change
+- The board is shared and must stay accurate for everyone
 
-This is the same trade-off in UI design: private convenience versus shared coordination.
-
-### Example 6: Browser and server interaction
-
-A form field being edited is local state. The saved customer record returned by the server may become global state if many parts of the app need it.
-
-```txt
-Local: draftEmail = "ana@new.com"
-Server-backed shared data: customer.email = "ana@old.com"
-```
-
-When the user clicks Save:
-
-1. The local draft is validated.
-2. The browser sends the new value to the server.
-3. The shared customer data is updated after success.
-
-This keeps temporary edits separate from shared committed data.
-
-### Example 7: Incorrect scope choice
-
-```txt
-Global: tooltipVisible = true
-```
-
-This is usually the wrong choice. A tooltip shown in one small area does not need app-wide coordination, so making it global adds unnecessary coupling.
+That is the same trade-off in UI systems: private convenience versus shared coordination.
 
 ---
 
 ## Quickfire (Interview Q&A)
 
 **Q: What is local state?**  
-State owned and used by one small part of the UI. It usually represents temporary or isolated data.
+State used and owned by one small part of the UI.
 
 **Q: What is global state?**  
-State shared across multiple distant parts of an application. It exists so those parts can stay consistent.
+State shared across multiple distant parts of the application.
 
-**Q: How do you decide whether state should be local or global?**  
-Ask who reads it, who writes it, and how many parts must stay in sync. Scope should match usage.
+**Q: How do you decide between local and global state?**  
+Ask who reads it, who writes it, and how many parts must stay in sync.
 
-**Q: Is global state always better because it is easier to access?**  
-No. Easier access often means more coupling and more accidental dependencies.
+**Q: Why not make everything global?**  
+Because global state increases coupling, coordination cost, and the chance of unrelated updates affecting each other.
 
-**Q: Why is duplicated state dangerous?**  
-Because two copies of one logical value can drift apart. Once they disagree, the UI becomes inconsistent.
+**Q: Why not keep everything local?**  
+Because shared facts then get copied into multiple places and become inconsistent.
 
-**Q: What does "single source of truth" mean here?**  
-It means one authoritative place holds the real value. Other views read or derive from that value instead of copying it.
+**Q: What is a source of truth?**  
+It is the one authoritative place where a fact is stored and updated.
 
-**Q: Can local state become global later?**  
-Yes. That is a normal evolution when more parts of the app need the same data.
+**Q: Can state move from local to global over time?**  
+Yes. When more parts of the app need the same value, the scope can expand.
 
-**Q: What kind of data is usually local?**  
-Transient UI details like input drafts, open/closed flags, hover state, or the selected item in one small widget.
+**Q: Is temporary form input usually local or global?**  
+Usually local, because it is short-lived and belongs to one editing flow.
 
-**Q: What kind of data is usually global?**  
-Shared application data like the current user, cart contents, theme, active permissions, or app-wide notifications.
+**Q: What kind of data is often global?**  
+Current user, cart contents, selected workspace, active permissions, or app-wide filters.
 
-**Q: What is the main risk of making too much state global?**  
-The app becomes harder to change because unrelated features start depending on shared structures and shared updates.
-
-**Q: What is the main risk of keeping shared state local?**  
-Other parts of the UI create their own copies or awkward data paths, leading to inconsistency and unclear ownership.
-
-**Q: Is local vs global state mainly a storage decision?**  
-No. It is mainly a control and ownership decision about how data changes and who must agree on it.
+**Q: How does this topic relate to correctness?**  
+Correctness improves when one fact has one owner and one current value.
 
 ---
 
 ## Key Takeaways
 
-- Local vs global state is about scope, not just storage.
-- Keep state as local as possible, but no more local than correctness allows.
-- Promote state to global only when multiple distant consumers must agree on it.
-- One logical value should have one authoritative source.
-- Duplicated state creates inconsistency faster than it creates convenience.
-- Global state improves coordination but increases coupling.
-- Temporary UI details are usually local; shared application facts are usually global.
-- The best question is: who owns this data, and who must stay in sync with it?
+- Local vs global state is mainly a question of scope.
+- Keep data close to where it is used unless multiple distant parts must share it.
+- One logical fact should have one source of truth.
+- Global state solves consistency problems but adds coupling.
+- Local state is simpler for temporary, isolated UI data.
+- Shared committed data and local draft data should not be mixed.
+- Good state design makes ownership and data flow obvious.
 
 ---
 
 ## Vocabulary
 
-### Nouns (concepts)
+### Nouns
 
 **State**  
-Data that can change over time and affects behavior or rendering. In this topic, the main issue is where that data should live.
+Data that can change over time and affect what the UI shows or does.
 
 **Local state**  
-State scoped to one component or one small feature. It is usually read and updated by a single owner.
+State owned by one small UI area or feature. It is usually private and short-lived.
 
 **Global state**  
-State shared across broad parts of the application. It exists so multiple consumers can rely on the same value.
-
-**Scope**  
-The area of the application in which a value matters. Scope helps decide whether state should stay local or be shared.
-
-**Owner**  
-The part of the system responsible for holding and changing a piece of state. Clear ownership improves correctness.
-
-**Consumer**  
-A part of the UI or logic that reads a value. The number and distance of consumers strongly affect scope decisions.
+State shared across multiple distant parts of the application. It exists so those parts can stay consistent.
 
 **Source of truth**  
-The authoritative location of a logical value. If multiple copies exist, only one should be considered the real one.
+The authoritative place where a fact is stored. Other values should read or derive from it instead of duplicating it.
 
-**Duplication**  
-Storing the same logical data in multiple places. Duplication is a common cause of mismatch bugs.
+**Owner**  
+The part of the system responsible for creating, validating, and updating a piece of state.
+
+**Consumer**  
+A part of the system that reads state in order to render UI or make decisions.
+
+**Draft**  
+A temporary local version of data that is still being edited and is not yet the shared committed value.
 
 **Derived state**  
-A value computed from existing state instead of stored separately. It reduces synchronization problems.
-
-**Synchronization**  
-The act of keeping multiple values or views consistent with each other. Good state design tries to minimize manual synchronization.
+A value computed from existing state instead of stored as another separate copy.
 
 **Coupling**  
-A dependency between parts of a system. Too much global state can increase coupling between unrelated features.
+A dependency between parts of the system. More shared state usually means more coupling.
 
-**Transient data**  
-Short-lived data that matters only for a brief interaction. This is often a good candidate for local state.
+**Consistency**  
+The property that different parts of the app agree on the same logical fact.
 
-### Verbs (actions)
+### Verbs
 
 **Read**  
-To consume a value in order to render UI or make a decision. Reading patterns help reveal whether state is local or shared.
+To consume the current value of state. Readers depend on the state being up to date and valid.
 
 **Write**  
-To change a value. The more writers a value has, the more control and structure it usually needs.
+To change state from one value to another. Good designs limit who can write shared data.
 
 **Share**  
-To expose one value to multiple consumers. Sharing is the main reason state moves from local to global.
-
-**Promote**  
-To move state from a narrow scope to a wider scope. This happens when the data becomes relevant to more of the app.
+To make state available to more than one part of the application. Shared data needs stronger control.
 
 **Derive**  
-To compute one value from another value. Deriving avoids storing redundant copies of the same information.
+To compute one value from another. This reduces duplication and inconsistency.
 
 **Synchronize**  
-To keep different views or copies aligned. A strong local-vs-global decision reduces how much manual synchronization is needed.
+To keep multiple readers aligned with one current value. Global state often exists to support synchronization.
 
-### Adjectives (properties)
+### Adjectives
 
 **Local**  
-Limited in scope to one small area. Local state is easier to reason about because fewer parts can affect it.
+Limited in scope to one small area. Local data usually has fewer readers and simpler control.
 
 **Global**  
-Shared across large parts of the application. Global state is useful for consistency but requires careful control.
+Wide in scope across the application. Global data must be coordinated carefully.
 
 **Shared**  
-Used by more than one consumer. Shared data often needs a clearly defined owner and update path.
+Read by multiple parts of the app. Shared values need a clear source of truth.
+
+**Temporary**  
+Short-lived and often tied to an in-progress interaction, such as typing into a field.
 
 **Authoritative**  
-Considered the official correct value. An authoritative source prevents arguments between multiple copies.
-
-**Consistent**  
-In agreement across all readers and views. Good state management tries to keep shared data consistent at all times.
-
-**Transient**  
-Temporary and short-lived. Transient values are usually better kept local.
+Trusted as the real current value. An authoritative state location is the one other parts should rely on.

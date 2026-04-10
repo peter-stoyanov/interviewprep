@@ -1,46 +1,46 @@
 # Custom Hooks
 
 **Abstraction level**: pattern
-**Category**: React logic reuse / frontend state management
+**Category**: React logic reuse and component behavior composition
 
 ---
 
 ## Related Topics
 
-- **Implements this idea**: `useOnlineStatus`, `useFetch`, `useLocalStorage`
-- **Depends on this**: hooks, component render cycle, state, effects
-- **Works alongside**: component composition, context, reducer-based state
-- **Contrast with**: utility functions, higher-order components, render props
+- **Implementations of this**: `useOnlineStatus`, `useFetch`, `useLocalStorage`
+- **Depends on this**: hooks, component render cycle, local state, effects
+- **Works alongside**: component composition, context, reducers
+- **Contrast with**: utility functions, render props, higher-order components
 - **Temporal neighbors**: learn basic hooks first; learn context and shared state patterns after
 
 ---
 
 ## What is it
 
-A custom hook is a React pattern for packaging reusable stateful logic into a function. It lets multiple components use the same behavior without copying the same state, effect, and event-handling code into each component. A custom hook does not render UI. Its job is to manage data, react to changes, and return useful values or actions to the component that called it.
+A custom hook is a React pattern for reusing stateful behavior across components. It is a function that uses hooks internally and returns data, actions, or both. It does not render UI. Its job is to control how some piece of data is read, updated, synchronized, or derived over time.
 
-- **Data**: local state, derived values, browser signals, server results
-- **Where it lives**: browser memory, inside each component instance that calls the hook
-- **Who reads/writes it**: the component passes inputs in; the hook reads them, updates internal state, and returns outputs
-- **How it changes over time**: inputs change, external events happen, state updates, and the returned values change on the next render
+- **Data**: local state, derived values, async status, browser signals, external inputs
+- **Where it lives**: in browser memory, inside each component instance that calls the hook
+- **Who reads/writes it**: the component passes inputs in; the hook reads those inputs, updates internal state, and returns outputs
+- **How it changes over time**: inputs change, external events happen, the hook updates state, and the component re-renders with new values
 
 ---
 
 ## What problem does it solve
 
-Start with a simple case: two components both need to know whether the browser is online. Each component can add event listeners, store online/offline state, and clean up on unmount.
+Start with a simple case: two components both need to know whether the user is online. Each component can keep its own `online` value, subscribe to browser events, and clean up when it is removed.
 
-That looks manageable once. It becomes messy when the same logic appears in three, five, or ten components.
+That is manageable once. It gets messy when the same behavior appears in many places: profile page, header, checkout flow, notification banner. Now the same data rules exist in multiple files.
 
-Without custom hooks, common failure modes appear:
+Without custom hooks, the failure modes are predictable:
 
-- **Duplication**: the same state and effect logic is copied into many components
-- **Inconsistency**: one component updates correctly, another forgets cleanup, another handles errors differently
-- **Invalid data**: one version keeps `loading` true forever, another returns stale data after the input changed
-- **Hard-to-track changes**: fixing a bug means finding every copy of the logic
-- **Unclear ownership**: the component is doing both UI work and reusable behavior work
+- **Duplication**: the same state and event logic is copied repeatedly
+- **Inconsistency**: one copy handles cleanup correctly, another forgets
+- **Invalid data**: one copy returns stale results or impossible state combinations
+- **Hard-to-track changes**: a bug fix must be applied in many places
+- **Unclear ownership**: components mix UI concerns with reusable behavior concerns
 
-The real problem is not "writing less code." The real problem is controlling how shared behavior changes over time while keeping data flow explicit.
+The real problem is control. When data changes over time, you need one clear place that defines how that change is handled.
 
 ---
 
@@ -48,49 +48,47 @@ The real problem is not "writing less code." The real problem is controlling how
 
 ### 1. Encapsulate one behavior
 
-A custom hook groups one behavior into one place: for example, "track online status" or "load a user by id." The state, transitions, and cleanup logic live together instead of being scattered across components.
+A custom hook keeps one behavior in one unit, such as "track online status" or "load a user." The state, transitions, and synchronization logic stay together instead of being scattered across components.
 
 ### 2. Make inputs explicit
 
-The component passes data into the hook through parameters. That makes ownership clear: the component provides the input, and the hook decides how behavior should react to that input.
+The component passes inputs into the hook through parameters. That makes data flow visible: the caller owns the input, and the hook decides how behavior should react to it.
 
-### 3. Return controlled outputs
+### 3. Return a small contract
 
-The hook returns the current data and, when useful, functions that change that data. This creates a clean contract: input goes in, stateful behavior happens, useful values come out.
+The hook returns only what the component needs: current data, derived data, and maybe actions. This keeps the boundary clear and reduces hidden coupling.
 
-### 4. Keep flow predictable
+### 4. Keep change predictable
 
-The component calls the hook during render, receives values, and renders UI from those values. When the hook's internal state changes, React re-renders the component. The flow stays one-way and observable.
+The component calls the hook during render, gets current outputs, and renders UI from them. When the hook updates its state, React re-renders the component, so the flow stays consistent and one-way.
 
-### 5. Reuse logic without sharing state by accident
+### 5. Reuse logic without accidental shared state
 
-This is a key interview point: custom hooks reuse logic, not state. If two components call the same custom hook, each call gets its own independent state unless the hook is explicitly connected to shared storage like context, the browser, or a server.
+This matters in interviews: custom hooks reuse logic by default, not state. If two components call the same custom hook, each call has its own state unless the hook explicitly reads from shared storage such as context, the browser, or a server.
 
 ### 6. Separate behavior from presentation
 
-The component decides how things look. The custom hook decides how data is read, updated, synchronized, or derived. That separation makes components smaller and easier to reason about.
+The hook controls how data changes. The component controls how that data is shown. That makes both pieces easier to read, test, and change.
 
 ---
 
-## What if we didn't have it
+## What if we didn't have it (Alternatives)
 
-### 1. Copy-paste the logic into each component
+### 1. Copy the same logic into every component
 
 ```jsx
 function Header() {
   const [online, setOnline] = useState(navigator.onLine);
-  // same listener logic here
 }
 
 function Sidebar() {
   const [online, setOnline] = useState(navigator.onLine);
-  // same listener logic again
 }
 ```
 
-This works at first, then drifts. One copy gets fixed, another does not.
+This works until one copy changes and the others do not. Control is duplicated, so correctness drifts.
 
-### 2. Push stateful behavior into a plain helper
+### 2. Put the behavior in a plain helper function
 
 ```jsx
 function loadUser(id, setUser, setLoading) {
@@ -99,36 +97,34 @@ function loadUser(id, setUser, setLoading) {
 }
 ```
 
-This hides control in the wrong place. The helper depends on setters owned by the component, so data flow becomes indirect and tightly coupled.
+This pushes state control into a helper that depends on setters owned elsewhere. The flow becomes indirect and tightly coupled.
 
-### 3. Keep everything inline in one large component
+### 3. Keep everything inside one large component
 
 ```jsx
-function ProfilePage({ userId }) {
-  // fetch logic
-  // retry logic
-  // loading state
-  // error state
+function ProfilePage() {
+  // fetch state
+  // retry state
   // online status
-  // window resize logic
+  // resize logic
 }
 ```
 
-The component now owns UI and multiple behaviors at once. It becomes hard to test, hard to read, and hard to change safely.
+The component now owns UI and multiple behaviors. That makes it harder to follow which data changes for which reason.
 
-### 4. Share mutable module state as a quick hack
+### 4. Use shared mutable module data as a shortcut
 
 ```jsx
-let cachedValue = null;
+let cachedUser = null;
 ```
 
-This creates hidden coupling between component instances. One component can affect another without that connection being visible in props or returned values.
+This creates hidden coupling between component instances. One part of the UI can affect another without any explicit input or output.
 
 ---
 
 ## Examples
 
-### Example 1: Minimal conceptual example
+### 1. Minimal conceptual example
 
 ```jsx
 function useCounter() {
@@ -137,9 +133,9 @@ function useCounter() {
 }
 ```
 
-Data is `count`. The hook controls how it changes and returns both the current value and the allowed update action.
+The hook owns one piece of data, `count`, and one allowed transition, `increment`.
 
-### Example 2: Component using the hook
+### 2. Component using that hook
 
 ```jsx
 function CounterPanel() {
@@ -148,120 +144,117 @@ function CounterPanel() {
 }
 ```
 
-The component does not manage the counting logic itself. It reads returned data and renders UI from it.
+The component reads data and renders UI. The hook controls how the data changes.
 
-### Example 3: Browser event flow
+### 3. Same hook, two separate callers
+
+```jsx
+function A() {
+  const { count } = useCounter();
+}
+
+function B() {
+  const { count } = useCounter();
+}
+```
+
+`A` and `B` reuse the same logic but do not share the same `count`. Each call creates its own local state flow.
+
+### 4. Browser event example
 
 ```jsx
 function useOnlineStatus() {
   const [online, setOnline] = useState(navigator.onLine);
-  // subscribe to online/offline events, update state, clean up later
   return online;
 }
 ```
 
-Flow: browser sends events, the hook receives them, state changes, the component re-renders with new data.
+Conceptually, the browser sends `online` and `offline` events, the hook updates state, and the component re-renders from the latest value.
 
-### Example 4: Server interaction
+### 5. Input-driven async behavior
 
 ```jsx
 function useUser(userId) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  // when userId changes, fetch new user and update state
   return { user, loading };
 }
 ```
 
-Input is `userId`. Output is `{ user, loading }`. The hook turns network activity into UI-friendly state.
+Input is `userId`. Output is data shaped for UI. The hook turns network change over time into predictable component state.
 
-### Example 5: Incorrect vs correct mental model
-
-```jsx
-function StatusA() {
-  const online = useOnlineStatus();
-}
-
-function StatusB() {
-  const online = useOnlineStatus();
-}
-```
-
-This is **not** one shared `online` state inside React. It is two separate hook calls reusing the same logic. They may show the same value because both read the same browser source.
-
-### Example 6: Derived data
+### 6. Derived data in a hook
 
 ```jsx
 function useCartSummary(items) {
-  const total = items.reduce((sum, item) => sum + item.price, 0);
-  return { total, itemCount: items.length };
+  return {
+    itemCount: items.length,
+    total: items.reduce((sum, item) => sum + item.price, 0),
+  };
 }
 ```
 
-Not every custom hook needs internal state. A hook can also package a reusable transformation from input data to derived output data.
+Not every custom hook needs internal state. A hook can also package a reusable data transformation.
 
-### Example 7: Real-world analogy
+### 7. Incorrect vs correct mental model
 
-Think of a custom hook as a reusable control procedure.
+```jsx
+const online = useOnlineStatus();
+```
 
-- Input: which machine or user you care about
-- Flow: signals arrive from the browser or server
-- Control: the procedure decides how to update current status
-- Output: the latest status and allowed actions
+Incorrect: "The hook stores one global online value for the whole app."
 
-Each caller runs the same procedure, but each caller still has its own local working state.
+Correct: "Each caller runs the same behavior. They may read the same browser signal, but the hook call itself is still local to that component."
+
+### 8. Real-world analogy
+
+A custom hook is like a reusable operating procedure. Input goes in, the procedure watches for changes, applies rules, and returns the latest status. Different teams can use the same procedure without sharing the same worksheet.
 
 ---
 
 ## Quickfire (Interview Q&A)
 
 **Q: What is a custom hook?**  
-A custom hook is a function that packages reusable React behavior. It manages data and change over time, then returns values or actions to a component.
+A custom hook is a function that packages reusable React behavior. It returns data, actions, or both, but not UI.
 
-**Q: Why use a custom hook instead of copying code?**  
-It keeps one source of truth for a behavior. That reduces duplication and makes fixes consistent.
+**Q: Why use a custom hook instead of copy-paste?**  
+It gives one place to control how a behavior works. That reduces duplication and inconsistent fixes.
 
 **Q: Does a custom hook share state between components?**  
 No. It shares logic by default, not state.
 
 **Q: What does a custom hook usually return?**  
-It returns the current data and sometimes functions that change that data.
-
-**Q: Can a custom hook render JSX?**  
-No. Rendering is the component's job.
+It usually returns current data, derived data, and functions that trigger valid updates.
 
 **Q: How is a custom hook different from a utility function?**  
 A utility function is usually a plain transformation. A custom hook participates in React's stateful render flow.
 
-**Q: Why do custom hooks start with `use`?**  
-The name signals that the function follows hook rules and is meant to be called like a hook.
+**Q: Can a custom hook render JSX?**  
+No. Rendering belongs to components.
+
+**Q: Why does the name start with `use`?**  
+The name signals that it follows hook rules and should be called as a hook.
 
 **Q: When should you extract a custom hook?**  
-When the same stateful behavior appears in multiple places or when one component mixes too much UI and behavior logic.
-
-**Q: Can one component use many custom hooks?**  
-Yes. That is often a good way to keep behaviors separated and readable.
+When the same behavior appears in multiple components or one component is mixing too much behavior with UI.
 
 **Q: Can a custom hook call other hooks?**  
-Yes. That is how it composes smaller behaviors into a reusable unit.
+Yes. That is how it composes smaller pieces of behavior into one reusable unit.
 
-**Q: What is the main trade-off?**  
-Abstraction can hide flow if the hook becomes too generic or tries to do too much.
-
-**Q: When is a custom hook unnecessary?**  
-If the logic is used once and is still simple, extracting it may add indirection without real benefit.
+**Q: What is the main trade-off of custom hooks?**  
+They reduce duplication, but a badly designed hook can hide data flow and make behavior harder to see.
 
 ---
 
 ## Key Takeaways
 
-- A custom hook is a way to control reusable stateful logic.
-- It manages behavior, not presentation.
-- Inputs go in, state changes over time, outputs come out.
-- It improves reuse by centralizing one behavior in one place.
-- It reuses logic without automatically sharing state.
-- It makes ownership and data flow more explicit.
-- It is most useful when components repeat the same change-handling logic.
+- A custom hook is a way to control reusable behavior, not a way to render UI.
+- It makes data flow explicit: inputs in, controlled changes, outputs out.
+- It is most useful when the same stateful logic appears in multiple places.
+- It improves correctness by centralizing one set of data rules.
+- It reuses logic without automatically creating shared state.
+- Good custom hooks have a small, clear contract.
+- If a hook becomes too broad, it turns into hidden complexity instead of reuse.
 
 ---
 
@@ -270,31 +263,34 @@ If the logic is used once and is still simple, extracting it may add indirection
 ### Nouns (concepts)
 
 **Hook**  
-A hook is a React function that participates in component state and lifecycle behavior. Custom hooks are built from that same model.
+A hook is a React function that participates in stateful component behavior. Custom hooks are built from the same mechanism.
 
 **Custom hook**  
-A custom hook is a user-defined hook that packages reusable behavior. It returns data or actions instead of UI.
+A custom hook is a user-defined hook that packages reusable behavior. It returns values and actions instead of UI.
 
 **Component**  
-A component renders UI from data. It can call custom hooks to get that data and behavior.
+A component renders UI from current data. It calls custom hooks to get behavior and state.
 
 **State**  
-State is data that changes over time and affects rendering. Custom hooks often own and update local state.
-
-**Effect**  
-An effect is work triggered by rendering that synchronizes with something outside pure rendering, such as the browser or network. Many custom hooks use effects internally.
+State is data that changes over time and affects what the user sees. Custom hooks often own or shape this data.
 
 **Input**  
-Input is the data passed into a hook, usually through parameters. It controls how the hook behaves.
+Input is the data passed into a hook through parameters. It controls how the hook behaves.
 
 **Output**  
-Output is what a hook returns to the component. This is usually current data, derived data, and update functions.
+Output is what the hook returns to the component. This is usually current data, derived data, or update functions.
 
-**Derived value**  
-A derived value is data computed from other data instead of stored separately. A custom hook can return derived values to keep components simpler.
+**Derived data**  
+Derived data is computed from existing data instead of stored separately. Hooks often return derived values to keep components simpler.
+
+**Effect**  
+An effect is logic that synchronizes with something outside pure rendering, such as the browser or network. Many custom hooks use effects internally.
 
 **Subscription**  
-A subscription is an ongoing connection to external changes, such as browser events or a socket. A custom hook can manage the setup and cleanup of that flow.
+A subscription is an ongoing connection to external changes, such as events or messages. A custom hook can manage starting and stopping that connection.
+
+**Contract**  
+A contract is the public shape of a hook: what it accepts and what it returns. A good contract makes behavior predictable for callers.
 
 ### Verbs (actions)
 
@@ -302,30 +298,30 @@ A subscription is an ongoing connection to external changes, such as browser eve
 To encapsulate means to keep related logic together behind a small interface. A custom hook encapsulates one behavior.
 
 **Reuse**  
-To reuse means to apply the same logic in multiple places without duplicating it. Custom hooks make that reuse explicit.
+To reuse means to apply the same logic in multiple places without duplicating code. That is the main purpose of a custom hook.
 
 **Derive**  
-To derive means to compute one value from another. Hooks often derive UI-ready data from raw input data.
-
-**Subscribe**  
-To subscribe means to start listening for external changes. A hook may subscribe to browser or server events and update state when messages arrive.
+To derive means to compute one value from another. Hooks often derive UI-ready data from raw inputs.
 
 **Synchronize**  
-To synchronize means to keep one piece of data aligned with another source over time. Custom hooks often synchronize component state with the browser or network.
+To synchronize means to keep local state aligned with an external source over time. Hooks often do this with browser or network data.
+
+**Subscribe**  
+To subscribe means to start listening for external changes. A hook may subscribe to events and update state when those events arrive.
 
 ### Adjectives (properties)
 
 **Reusable**  
-Reusable logic can be applied in more than one component without copy-paste. That is the main value of a custom hook.
-
-**Isolated**  
-Isolated state belongs to one hook call inside one component instance. This is why custom hooks do not automatically create shared state.
+Reusable logic can be applied in many components without copy-paste. Custom hooks exist to make that practical.
 
 **Explicit**  
-Explicit means the flow is visible in the function signature and return value. Good custom hooks make inputs and outputs obvious.
+Explicit means the data flow is visible in the hook's inputs and outputs. Good hooks make control obvious.
+
+**Isolated**  
+Isolated state belongs to one hook call in one component instance. This is why two callers do not automatically share state.
 
 **Derived**  
-Derived data is calculated from existing data rather than stored separately. This reduces duplication and inconsistency.
+Derived data is calculated from other data rather than stored independently. This reduces duplication and inconsistency.
 
 **Invalid**  
-Invalid data is data in a wrong or impossible state, such as stale results for the wrong input. Good custom hooks reduce these mistakes by centralizing behavior.
+Invalid data is data in a wrong or impossible state, such as stale or contradictory values. Centralizing logic in a hook helps prevent that.
